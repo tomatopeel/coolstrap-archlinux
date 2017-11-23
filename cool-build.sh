@@ -63,4 +63,4 @@ sudo ./build.sh -v
 iso=$(ls ./out)
 sudo mv "out/$iso" "$wd"
 cd "$wd" || exit
-sudo find . ! -name "$iso" -type f -o -type -d -exec rm -rf {} +
+sudo find . ! -name "$iso" -type f -o -type d -exec rm -rf {} +
