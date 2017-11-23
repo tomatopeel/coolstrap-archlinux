@@ -7,11 +7,20 @@ add_packages() {
   printf "%s\n" "$@" >> "$file"
 }
 
+build_monero() {
+  git clone https://aur.archlinux.org/monero.git
+  cd monero
+  MAKEFLAGS="-j$(nproc)" PKGDEST="$localrepo" makepkg
+}
+
 wd="$(dirname $(readlink -f $0))/out"
 mkdir $wd; cd $wd
+localrepo="$wd/localrepo"
+mkdir $localrepo
 
 git clone https://git.archlinux.org/archiso.git
-pkgsboth="$wd/archiso/configs/releng/packages.both"
+relengdir="$wd/archiso/configs/releng"
+pkgsboth="$relengdir/packages.both"
 
 selection=$(whiptail --title "Software Selection" --checklist \
   "Please select the desired wallet software to install" 20 78 3 \
@@ -23,17 +32,29 @@ selection=$(whiptail --title "Software Selection" --checklist \
 while read -r line; do
   case $line in
     btc_core)
-      add_packages "$pkgsboth" bitcoin-cli bitcoin-daemon
+      add_packages $pkgsboth bitcoin-cli bitcoin-daemon
       ;;
     btc_electrum)
-      add_packages "$pkgsboth" electrum
+      add_packages $pkgsboth electrum
       ;;
     xmr)
-      git clone https://aur.archlinux.org/monero.git
-      cd monero
-      localrepo="$wd/localrepo"
-      mkdir $localrepo
-      MAKEFLAGS="-j$(nproc)" PKGDEST="$localrepo" makepkg
+      build_monero
+      add_packages $pkgsboth monero
       ;;
   esac
 done <<< "$selection"
+
+cd $localrepo
+for file in ./*; do
+  repo-add localrepo.db.tar.gz "$file"
+done
+
+cd $relengdir
+cat >> pacman.conf <<EOF
+[localrepo]
+SigLevel = Optional TrustAll
+Server = file://$localrepo
+EOF
+
+mkdir out
+sudo ./build.sh -v
