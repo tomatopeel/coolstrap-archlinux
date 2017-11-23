@@ -7,11 +7,11 @@ add_packages() {
   printf "%s\n" "$@" >> "$file"
 }
 
-cwd=$(dirname $(readlink -f $0))
-mkdir out; cd out
+wd="$(dirname $(readlink -f $0))/out"
+mkdir $wd; cd $wd
 
 git clone https://git.archlinux.org/archiso.git
-pkgsboth='archiso/configs/releng/packages.both'
+pkgsboth="$wd/archiso/configs/releng/packages.both"
 
 selection=$(whiptail --title "Software Selection" --checklist \
   "Please select the desired wallet software to install" 20 78 3 \
@@ -29,16 +29,11 @@ while read -r line; do
       add_packages "$pkgsboth" electrum
       ;;
     xmr)
-      git clone https://github.com/monero-project/monero
+      git clone https://aur.archlinux.org/monero.git
       cd monero
-      make
+      localrepo="$wd/localrepo"
+      mkdir $localrepo
+      MAKEFLAGS="-j$(nproc)" PKGDEST="$localrepo" makepkg
       ;;
   esac
 done <<< "$selection"
-
-#cd $cwd; rm -rf out
-
-#echo "$selection" >> archiso/configs/releng/packages.both
-#if [[ $selection == *"monero"* ]]; then
-#  echo "It's there!"
-#fi
