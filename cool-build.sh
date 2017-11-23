@@ -10,7 +10,7 @@ add_packages() {
 build_monero() {
   git clone https://aur.archlinux.org/monero.git
   cd monero
-  MAKEFLAGS="-j$(nproc)" PKGDEST="$localrepo" makepkg
+  PKGDEST="$localrepo" makepkg
 }
 
 wd="$(dirname $(readlink -f $0))/out"
@@ -50,6 +50,7 @@ for file in ./*; do
 done
 
 cd $relengdir
+rm airootfs/etc/udev/rules.d/81-dhcpcd.rules
 cat >> pacman.conf <<EOF
 [localrepo]
 SigLevel = Optional TrustAll
@@ -58,3 +59,8 @@ EOF
 
 mkdir out
 sudo ./build.sh -v
+
+iso=$(ls ./out)
+sudo mv "out/$iso" $wd
+cd $wd
+sudo find . ! -name $iso -type f -o -type -d -exec rm -rf {} +
