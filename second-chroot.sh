@@ -32,3 +32,6 @@ grub-install --force --target=i386-pc "$DEVICE" ||
 
 grub-mkconfig -o /boot/grub/grub.cfg ||
   error_exit "couldn't grub-mkconfig"
+
+useradd -m -G wheel -s /bin/bash cooler
+echo "%wheel ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers

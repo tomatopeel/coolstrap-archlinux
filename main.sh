@@ -60,6 +60,8 @@ root.x86_64/bin/arch-chroot mnt second-chroot.sh \
 echo "========== second-chroot complete =========="
 sleep 1
 
+rsync -a scripts mnt/home/cooler/
+
 umount "${DEVICE}1" || error_exit "couldn't umount ${DEVICE}1"
 sleep 2
 umount "${DEVICE}2" || error_exit "couldn't umount ${DEVICE}2"
