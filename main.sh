@@ -39,17 +39,22 @@ cp first-chroot.sh root.x86_64/usr/bin/first-chroot.sh
 root.x86_64/bin/arch-chroot root.x86_64 first-chroot.sh "$DEVICE"
 
 echo "========== first-chroot complete =========="
-sleep 2
+sleep 1
+umount "${DEVICE}3" || error_exit "couldn't umount ${DEVICE}3"
+sleep 1
 umount "${DEVICE}1" || error_exit "couldn't umount ${DEVICE}1"
-sleep 2
+sleep 1
 umount "${DEVICE}2" || error_exit "couldn't umount ${DEVICE}2"
-sleep 2
+sleep 1
 umount root.x86_64 2>/dev/null
-sleep 2
+sleep 1
 
 mkdir mnt
 mount "${DEVICE}2" mnt || error_exit "couldn't mount ${DEVICE}2"
+sleep 1
 mount "${DEVICE}1" mnt/boot || error_exit "couldn't mount ${DEVICE}1"
+sleep 1
+mount "${DEVICE}3" mnt/home || error_exit "couldn't mount ${DEVICE}3"
 
 root.x86_64/usr/bin/genfstab -U mnt > mnt/etc/fstab
 
@@ -62,8 +67,10 @@ sleep 1
 
 rsync -a scripts mnt/home/cooler/
 
+umount "${DEVICE}3" || error_exit "couldn't umount ${DEVICE}3"
+sleep 1
 umount "${DEVICE}1" || error_exit "couldn't umount ${DEVICE}1"
-sleep 2
+sleep 1
 umount "${DEVICE}2" || error_exit "couldn't umount ${DEVICE}2"
-sleep 2
+sleep 1
 umount mnt 2>/dev/null
