@@ -17,9 +17,10 @@ repeat-try() {
   error_exit "$msg"
 }
 
-pass generate bitcoin-script-test -f 32 1>/dev/null 2>&1 ||
+PASS_KEY=cold-btc
+pass generate "$PASS_KEY" -f 32 1>/dev/null 2>&1 ||
   error_exit "$LINENO: Couldn't gen pw"
-PW=$(pass bitcoin-script-test || error_exit "$LINENO: couldn't get pw")
+PW=$(pass "$PASS_KEY" || error_exit "$LINENO: couldn't get pw")
 
 DATADIR="$(pwd)/data"
 mkdir "$DATADIR" || error_exit "$LINENO: couldn't mkdir data"

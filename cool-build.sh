@@ -1,5 +1,10 @@
 #!/bin/bash
 
+error_exit() {
+  echo "$0: $1" 1>&2
+  exit 1
+}
+
 # add_packages FILE PKGS...
 add_packages() {
   file="$1"
@@ -8,9 +13,8 @@ add_packages() {
 }
 
 build_monero() {
-  git clone https://aur.archlinux.org/monero.git
-  cd monero || return
-  PKGDEST="$localrepo" makepkg
+  git clone https://github.com/monero-project/monero
+  cd monero && make || error_exit "$LINENO: couldn't build monero"
 }
 
 wd="$(dirname "$(readlink -f "$0")")/out"
@@ -38,8 +42,8 @@ while read -r line; do
       add_packages "$pkgsboth" electrum
       ;;
     xmr)
-      build_monero
-      add_packages "$pkgsboth" monero
+#      build_monero
+#      add_packages "$pkgsboth" monero
       ;;
   esac
 done <<< "$selection"
