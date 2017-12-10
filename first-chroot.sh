@@ -26,5 +26,4 @@ mount "${DEVICE}1" /mnt/boot || error_exit "couldn't mount ${DEVICE}1"
 pacman-key --init
 pacman-key --populate archlinux
 pacman -Syyu --noconfirm
-pacstrap /mnt base base-devel
-genfstab -U /mnt >> /mnt/etc/fstab
+pacstrap /mnt base
