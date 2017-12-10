@@ -38,5 +38,5 @@ rankmirrors -n 3 /etc/pacman.d/mirrorlist.backup > /etc/pacman.d/mirrorlist
 
 pacman --noconfirm -Syuu
 
-PKGS="sudo pinentry pass bitcoin-cli bitcoin-daemon"
+PKGS="sudo pinentry pass jq bitcoin-cli bitcoin-daemon"
 pacstrap /mnt base $PKGS
