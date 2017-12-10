@@ -16,3 +16,11 @@ To Do's:
 
 * Cold transaction scripts
 * Encrypted volumes
+
+### Get Started
+
+1. `sudo DEVICE=/dev/sdX ./main.sh` where X is your block device.
+2. Reboot from the device.
+3. `scripts/init-gpg.sh`
+4. `pass init [your gpg-id]`
+5. `scripts/bitcoin.sh`
