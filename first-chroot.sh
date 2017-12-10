@@ -37,4 +37,6 @@ cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup
 rankmirrors -n 3 /etc/pacman.d/mirrorlist.backup > /etc/pacman.d/mirrorlist
 
 pacman --noconfirm -Syuu
-pacstrap /mnt base
+
+PKGS="bitcoin pass"
+pacstrap /mnt base "$PKGS"
