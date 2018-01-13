@@ -31,7 +31,7 @@ sed -i "${LN}iHOOKS=(base udev autodetect modconf block keymap keyboard encrypt 
 mkinitcpio -p linux || error_exit "couldn't mkinitcpio"
 pacman -S --noconfirm grub || error_exit "couldn't install grub package"
 
-UUID="$(blkid -s UUID /dev/sdb2 | sed -e 's/^.*"\(.*\)"/\1/')"
+UUID="$(blkid -s UUID "${DEVICE}2" | sed -e 's/^.*"\(.*\)"/\1/')"
 sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\".*\"/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet cryptdevice=UUID=$UUID:cryptroot root=\/dev\/mapper\/cryptroot\"/" /etc/default/grub
 
 grub-install --force --target=i386-pc "$DEVICE" ||
@@ -42,4 +42,8 @@ grub-mkconfig -o /boot/grub/grub.cfg ||
 
 useradd -m -G wheel -s /bin/bash cooler
 echo "%wheel ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+echo "(password for cooler user)"
 passwd cooler && passwd -l root
+
+echo "exec startlxde" > /home/cooler/.xinitrc
+chown cooler:cooler /home/cooler/.xinitrc

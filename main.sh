@@ -16,7 +16,6 @@ if [ `id -u` != 0 ] ; then
   error_exit "Please run with root privileges"
 fi
 
-
 TIMEZONE=$(timedatectl | grep 'Time zone' | awk '{print $3}')
 LOCALE=$(locale | grep 'LANG=' | sed 's/LANG=//')
 DATE=$(date -d now '+%Y.%m')
@@ -35,8 +34,43 @@ LN=$(grep -n "## Worldwide" \
 SEDEXP="$((LN+1)),$((LN+3)){s/#Server/Server/}"
 sed -i "$SEDEXP" root.x86_64/etc/pacman.d/mirrorlist
 
+echo "Preparing to securely wipe and re-partition $DEVICE"
+printf "$DEVICE is:\n\n"
+fdisk -l "$DEVICE"
+echo
+read -p "Are you sure? " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]
+then
+  error_exit "Exited"
+fi
+
+#echo "Securely wiping $DEVICE with /dev/urandom"
+#dd if=/dev/zero of="$DEVICE" count=2048 status=progress conv=fdatasync oflag=sync
+#dd if=/dev/urandom of="$DEVICE" seek=2048 status=progress conv=fdatasync oflag=sync
+#sync
+
+sfdisk "$DEVICE" << EOF || error_exit "couldn't partition with sfdisk"
+1MiB,500MiB,L,*
+-,-,L,-
+EOF
+sleep 1
+
+mkfs.ext4 -F "${DEVICE}1" || error_exit "$LINENO: couldn't mkfs"
+sleep 1
+
+cryptsetup -y -v luksFormat "${DEVICE}2" &&
+  cryptsetup open "${DEVICE}2" cryptroot &&
+  mkfs.ext4 /dev/mapper/cryptroot ||
+  error_exit "$LINENO: couldn't cryptsetup/mkfs/mount ${DEVICE}2"
+
+sleep 1
+cryptsetup close cryptroot
+sleep 1
+
 cp first-chroot.sh root.x86_64/usr/bin/first-chroot.sh
-root.x86_64/bin/arch-chroot root.x86_64 first-chroot.sh "$DEVICE"
+root.x86_64/bin/arch-chroot root.x86_64 first-chroot.sh "$DEVICE" ||
+  error_exit "first-chroot.sh exited"
 
 echo "========== first-chroot complete =========="
 sleep 1
@@ -58,11 +92,12 @@ root.x86_64/usr/bin/genfstab -U mnt > mnt/etc/fstab
 cp second-chroot.sh mnt/usr/bin/second-chroot.sh
 root.x86_64/bin/arch-chroot mnt second-chroot.sh \
   "$DEVICE" "$TIMEZONE" "$LOCALE"
+#|| "second-chroot.sh exited"
 
 echo "========== second-chroot complete =========="
 sleep 1
 
-rsync -a scripts mnt/home/cooler/
+#rsync -a scripts mnt/home/cooler/
 
 umount "${DEVICE}1" || error_exit "couldn't umount ${DEVICE}1"
 sleep 1

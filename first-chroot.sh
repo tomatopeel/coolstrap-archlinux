@@ -7,26 +7,11 @@ error_exit() {
 
 DEVICE="$1"
 
-#dd if=/dev/zero of="$DEVICE" seek=1 count=2047
-#sleep 1
-#
-#dd if=/dev/urandom of="$DEVICE" seek=2048 status=progress
-#sleep 1
+cryptsetup open "${DEVICE}2" cryptroot ||
+  error_exit "$LINENO: couldn't cryptsetup open ${DEVICE}2"
 
-sfdisk "$DEVICE" << EOF
-1MiB,500MiB,L,*
--,-,L,-
-EOF
-sleep 1
-
-mkfs.ext4 -F "${DEVICE}1" || error_exit "$LINENO: couldn't mkfs"
-sleep 1
-
-cryptsetup -y -v luksFormat "${DEVICE}2" &&
-  cryptsetup open "${DEVICE}2" cryptroot &&
-  mkfs.ext4 /dev/mapper/cryptroot &&
-  mount /dev/mapper/cryptroot /mnt ||
-  error_exit "$LINENO: couldn't cryptsetup/mkfs/mount ${DEVICE}2"
+mount /dev/mapper/cryptroot /mnt ||
+  error_exit "$LINENO: couldn't mount cryptroot to /mnt"
 
 mkdir /mnt/boot && mount "${DEVICE}1" /mnt/boot ||
   error_exit "$LINENO: couldn't mount ${DEVICE}1 to /mnt/boot"
@@ -39,5 +24,5 @@ rankmirrors -n 3 /etc/pacman.d/mirrorlist.backup > /etc/pacman.d/mirrorlist
 
 pacman --noconfirm -Syuu
 
-PKGS="arch-install-scripts sudo rsync pinentry pass jq bitcoin-cli bitcoin-daemon"
+PKGS="arch-install-scripts sudo rsync pinentry pass jq lxde"
 pacstrap /mnt base $PKGS
