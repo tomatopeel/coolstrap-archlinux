@@ -24,5 +24,5 @@ rankmirrors -n 3 /etc/pacman.d/mirrorlist.backup > /etc/pacman.d/mirrorlist
 
 pacman --noconfirm -Syuu
 
-PKGS="arch-install-scripts sudo rsync pinentry pass jq lxde"
-pacstrap /mnt base $PKGS
+PKGS="base arch-install-scripts sudo rsync"
+pacstrap /mnt $PKGS
