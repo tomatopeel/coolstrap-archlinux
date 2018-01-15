@@ -1,49 +1,48 @@
 #!/bin/bash
 
-error_exit() {
-  echo "$0: $1" 1>&2
-  exit 1
+die() {
+	if [[ ! -z "$1" ]]; then echo "Error: $1" >&2; fi
+	echo "Exiting..." >&2; exit 1
 }
 
 DEVICE="$1"
 TIMEZONE="$2"
 LOCALE="$3"
-HOSTNAME=cooler
+HOSTN="$4"
+USERNAME="$5"
+PASSWORD="$6"
 
 ln -sf /usr/share/zoneinfo/"$TIMEZONE" /etc/localtime ||
-  error_exit "couldn't link timezone"
+  die "couldn't link timezone"
 
-hwclock --systohc || error_exit "couldn't hwclock"
+hwclock --systohc || die "couldn't hwclock"
 
 cat /etc/locale.gen | grep "$LOCALE"
 sed -i "s/#$LOCALE/$LOCALE/" /etc/locale.gen ||
-  error_exit "couldn't sed locale"
+  die "couldn't sed locale"
 
 cat /etc/locale.gen | grep "$LOCALE"
 echo "LANG=$LOCALE" > /etc/locale.conf
 
-echo "$HOSTNAME" > /etc/hostname
+echo "$HOSTN" > /etc/hostname 
 
 LN="$(grep -n '^HOOKS=' /etc/mkinitcpio.conf | cut -d: -f1)"
 sed -i "${LN}d" /etc/mkinitcpio.conf
 sed -i "${LN}iHOOKS=(base udev autodetect modconf block keymap keyboard encrypt filesystems fsck)" /etc/mkinitcpio.conf
 
-mkinitcpio -p linux || error_exit "couldn't mkinitcpio"
-pacman -S --noconfirm grub || error_exit "couldn't install grub package"
+mkinitcpio -p linux || die "couldn't mkinitcpio"
+pacman -S --noconfirm grub || die "couldn't install grub package"
 
 UUID="$(blkid -s UUID "${DEVICE}2" | sed -e 's/^.*"\(.*\)"/\1/')"
 sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\".*\"/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet cryptdevice=UUID=$UUID:cryptroot root=\/dev\/mapper\/cryptroot\"/" /etc/default/grub
 
 grub-install --force --target=i386-pc "$DEVICE" ||
-  error_exit "couldn't install grub-install"
+  die "couldn't install grub-install"
 
 grub-mkconfig -o /boot/grub/grub.cfg ||
-  error_exit "couldn't grub-mkconfig"
+  die "couldn't grub-mkconfig"
 
-useradd -m -G wheel -s /bin/bash cooler
+useradd -m -G wheel -s /bin/bash "$USERNAME"
 echo "%wheel ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-echo "(password for cooler user)"
-passwd cooler && passwd -l root
-
-echo "exec startlxde" > /home/cooler/.xinitrc
-chown cooler:cooler /home/cooler/.xinitrc
+echo "$USERNAME:$PASSWORD" | chpasswd &&
+	passwd -l root

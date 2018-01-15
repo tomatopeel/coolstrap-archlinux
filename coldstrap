@@ -1,0 +1,175 @@
+#!/bin/bash
+
+die() {
+	if [[ ! -z "$1" ]]; then echo "Error: $1" >&2; fi
+	echo "Exiting..." >&2; exit 1
+}
+
+usage() {
+	read -r -d '' TEXT <<-EOF
+	Usage: $0 -d <bd> [ -x <de> -p <pkgs> -u <user> <scripts> ]
+	  -d <bd>       block device to operate on
+	  -x <de>       desktop environment, from: lxde (todo: add more)
+	  -p <pkgs>     additional packages to install from arch repo's
+	  -n <hostname> system hostname
+	  -u <user>     user username
+	  -h            show this help text
+
+	  <scripts>  additional scripts to run from in chroot following install
+	EOF
+	echo "$TEXT"
+}
+
+OPTIND=1
+DEVICE=
+DESKTOP=
+PKGS=
+HOSTN=
+USERNAME=
+SCRIPTS=
+while getopts ":d:x:p:n:u:h" opt; do
+	case $opt in
+		d)
+			DEVICE="$OPTARG"
+			;;
+		x)
+			DESKTOP="$OPTARG"
+			;;
+		p)
+			PKGS="$OPTARG"
+			;;
+		n)
+			HOSTN="$OPTARG"
+			;;
+		u)
+			USERNAME="$OPTARG"
+			;;
+		h)
+			usage && exit 0
+			;;
+		:)
+			echo "Option -$OPTARG requires an argument" >&2
+			usage && exit 1
+			;;
+		\?)
+			echo "Invalid options: -$OPTARG" >&2
+			usage && exit 1
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+if [[ -z "$DEVICE" ]]; then
+	usage && echo && die "-d <block device> is required" || die
+fi
+
+command -v haveged 1>/dev/null || die "haveged dependency is required"
+
+(( EUID == 0 )) || die "this script must be run with root privileges"
+
+read -rs -p "Please enter a password to encrypt the root partition with: " BD_PW ||
+	die "couldn't get root partition password from input"
+echo
+
+if [[ -z "$USERNAME" ]]; then
+	echo "Username not passed with -u flag"
+	read -r -p "Please enter a username for the user of the new system: " USERNAME ||
+		die "couldn't get username from input"
+fi
+
+read -rs -p "Please enter a password for user '$USERNAME': " USER_PW ||
+	die "couldn't get user password from input"
+echo; echo
+
+## Latest bootstrap image
+DATE=$(date -d now '+%Y.%m')
+MIRRURL=https://mirrors.kernel.org/archlinux/iso/latest
+TARBALL=archlinux-bootstrap-"$DATE".01-x86_64.tar.gz
+
+## Download and untar the bootstrap image
+if [ ! -d "root.x86_64" ]; then
+  if [ ! -f "$TARBALL" ]; then
+    curl -O "$MIRRURL/$TARBALL" || die "$LINENO: curl failed"
+  fi
+  tar xzf "$TARBALL" || die "$LINENO: tar failed"
+fi
+
+## Select some repo mirrors in the bootstrap image
+LN=$(grep -n "## Worldwide" \
+  root.x86_64/etc/pacman.d/mirrorlist | cut -d: -f1)
+SEDEXP="$((LN+1)),$((LN+3)){s/#Server/Server/}"
+sed -i "$SEDEXP" root.x86_64/etc/pacman.d/mirrorlist
+
+## Extra sanity before wiping the disk
+echo "Preparing to securely wipe and re-partition $DEVICE"; echo
+printf "$DEVICE is:\n\n"
+fdisk -l "$DEVICE"
+echo; read -p "Are you sure? (y/n): " -n 1 -r; echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then die; fi
+
+#echo "Securely wiping $DEVICE with /dev/urandom"
+#dd if=/dev/urandom of="$DEVICE" status=progress && sync
+
+## Format the disk. Unsure of sleep here, maybe sync?
+sfdisk "$DEVICE" << EOF || die "couldn't partition with sfdisk"
+1MiB,500MiB,L,*
+-,-,L,-
+EOF
+sleep 1
+
+## Create filesystem on the boot partition
+mkfs.ext4 -F "${DEVICE}1" || die "$LINENO: couldn't mkfs"
+sleep 1
+
+## Create encrypted root partition
+echo -n "$BD_PW" | cryptsetup -v luksFormat "${DEVICE}2" - &&
+  echo -n "$BD_PW" | cryptsetup open "${DEVICE}2" cryptroot - &&
+  mkfs.ext4 /dev/mapper/cryptroot ||
+  die "$LINENO: couldn't cryptsetup/mkfs/mount ${DEVICE}2"
+
+## Need to close and re-open encrypted partition in the chroot script
+sleep 1
+cryptsetup close cryptroot
+sleep 1
+## Unsure of sleeps here
+
+## Script passed to chroot into bootstrap image directory
+SCRIPT=in-bootstrap-chroot.sh
+cp "$SCRIPT" "root.x86_64/usr/bin/$SCRIPT"
+root.x86_64/bin/arch-chroot root.x86_64 "$SCRIPT" "$DEVICE" "$BD_PW" ||
+  die "$SCRIPT exited"
+unset SCRIPT
+sleep 1
+
+umount root.x86_64 >/dev/null 2>&1 
+sleep 1
+
+mkdir mnt
+mount /dev/mapper/cryptroot mnt || die "couldn't mount ${DEVICE}2"
+sleep 1
+mount "${DEVICE}1" mnt/boot || die "couldn't mount ${DEVICE}1"
+sleep 1
+
+root.x86_64/usr/bin/genfstab -U mnt > mnt/etc/fstab
+
+## Use timezone and locale of host
+TIMEZONE=$(timedatectl | grep 'Time zone' | awk '{print $3}')
+LOCALE=$(locale | grep 'LANG=' | sed 's/LANG=//')
+
+## Usual archlinux install procedure
+SCRIPT=in-new-sys-chroot.sh
+cp "$SCRIPT" mnt/usr/bin/"$SCRIPT"
+root.x86_64/bin/arch-chroot mnt "$SCRIPT" \
+  "$DEVICE" "$TIMEZONE" "$LOCALE" "$HOSTN" "$USERNAME" "$PASSWORD"
+
+sleep 1
+
+umount "${DEVICE}1" || die "couldn't umount ${DEVICE}1"
+sleep 1
+umount /dev/mapper/cryptroot || die "couldn't umount ${DEVICE}2"
+sleep 1
+umount mnt >/dev/null 2>&1
+cryptsetup close cryptroot || die "couldn't close cryptroot"
+
+echo
+echo "Voila!"
