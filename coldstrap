@@ -138,6 +138,7 @@ SCRIPT=in-bootstrap-chroot.sh
 cp "$SCRIPT" "root.x86_64/usr/bin/$SCRIPT"
 root.x86_64/bin/arch-chroot root.x86_64 "$SCRIPT" "$DEVICE" "$BD_PW" ||
   die "$SCRIPT exited"
+rm "root.x86_64/usr/bin/$SCRIPT"
 unset SCRIPT
 sleep 1
 
@@ -160,9 +161,29 @@ LOCALE=$(locale | grep 'LANG=' | sed 's/LANG=//')
 SCRIPT=in-new-sys-chroot.sh
 cp "$SCRIPT" mnt/usr/bin/"$SCRIPT"
 root.x86_64/bin/arch-chroot mnt "$SCRIPT" \
-  "$DEVICE" "$TIMEZONE" "$LOCALE" "$HOSTN" "$USERNAME" "$PASSWORD"
+  "$DEVICE" "$TIMEZONE" "$LOCALE" "$HOSTN" "$USERNAME" "$USER_PW"
+rm "mnt/usr/bin/$SCRIPT"
+unset SCRIPT
 
 sleep 1
+
+if [[ "$DESKTOP" == "lxde" ]]; then
+	SCRIPT=install-lxde
+	cp "$SCRIPT" "mnt/usr/bin/$SCRIPT"
+	root.x86_64/bin/arch-chroot mnt "$SCRIPT" ||
+		die "couldn't install lxde"
+	rm "mnt/usr/bin/$SCRIPT"
+	unset SCRIPT
+fi
+
+for SCRIPT in $@; do
+	cp "$SCRIPT" "mnt/usr/bin/$SCRIPT" ||
+		die "couldn't cp $SCRIPT"
+	root.x86_64/bin/arch-chroot mnt "$SCRIPT" ||
+		die "couldn't run $SCRIPT"
+	rm "mnt/usr/bin/$SCRIPT"
+done
+unset SCRIPT
 
 umount "${DEVICE}1" || die "couldn't umount ${DEVICE}1"
 sleep 1
