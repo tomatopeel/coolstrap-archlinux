@@ -5,16 +5,18 @@ die() {
 	echo "Exiting..." >&2; exit 1
 }
 
+read -r BD_PW
 DEVICE="$1"
-BD_PW="$2"
 
-echo -n "$BD_PW" | cryptsetup open "${DEVICE}2" cryptroot - ||
-  die "$LINENO: couldn't cryptsetup open ${DEVICE}2"
+for i in 1 2; do
+  echo -n "$BD_PW" | cryptsetup open "$DEVICE$i" "part$i" - ||
+    die "$LINENO: couldn't cryptsetup open $DEVICE$i"
+done
 
-mount /dev/mapper/cryptroot /mnt ||
-  die "$LINENO: couldn't mount cryptroot to /mnt"
+mount /dev/mapper/part2 /mnt ||
+  die "$LINENO: couldn't mount part2 to /mnt"
 
-mkdir /mnt/boot && mount "${DEVICE}1" /mnt/boot ||
+mkdir /mnt/boot && mount /dev/mapper/part1 /mnt/boot ||
   die "$LINENO: couldn't mount ${DEVICE}1 to /mnt/boot"
 
 pacman-key --init
@@ -28,7 +30,8 @@ pacman --noconfirm -Syuu
 PKGS="base arch-install-scripts sudo rsync"
 pacstrap /mnt $PKGS
 
-umount "${DEVICE}1" || die "couldn't umount ${DEVICE}1"
-umount /dev/mapper/cryptroot || die "couldn't umount cryptroot"
+for i in 1 2; do
+  umount "/dev/mapper/part$i" || die "couldn't umount part$i"
+done
 
 exit 0
