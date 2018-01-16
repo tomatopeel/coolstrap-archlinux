@@ -1,12 +1,12 @@
 #!/bin/bash
 
 die() {
-	if [[ ! -z "$1" ]]; then echo "Error: $1" >&2; fi
-	echo "Exiting..." >&2; exit 1
+  if [[ ! -z "$1" ]]; then echo "Error: $1" >&2; fi
+  echo "Exiting..." >&2; exit 1
 }
 
 usage() {
-	read -r -d '' TEXT <<-EOF
+  read -r -d '' TEXT <<-EOF
 	Usage: $0 -d <bd> [ -x <de> -p <pkgs> -u <user> <scripts> ]
 	  -d <bd>       block device to operate on
 	  -x <de>       desktop environment, from: lxde (todo: add more)
@@ -16,8 +16,8 @@ usage() {
 	  -h            show this help text
 
 	  <scripts>  additional scripts to run from in chroot following install
-	EOF
-	echo "$TEXT"
+  EOF
+  echo "$TEXT"
 }
 
 OPTIND=1
@@ -28,39 +28,39 @@ HOSTN=
 USERNAME=
 SCRIPTS=
 while getopts ":d:x:p:n:u:h" opt; do
-	case $opt in
-		d)
-			DEVICE="$OPTARG"
-			;;
-		x)
-			DESKTOP="$OPTARG"
-			;;
-		p)
-			PKGS="$OPTARG"
-			;;
-		n)
-			HOSTN="$OPTARG"
-			;;
-		u)
-			USERNAME="$OPTARG"
-			;;
-		h)
-			usage && exit 0
-			;;
-		:)
-			echo "Option -$OPTARG requires an argument" >&2
-			usage && exit 1
-			;;
-		\?)
-			echo "Invalid options: -$OPTARG" >&2
-			usage && exit 1
-			;;
-	esac
+  case $opt in
+    d)
+      DEVICE="$OPTARG"
+      ;;
+    x)
+      DESKTOP="$OPTARG"
+      ;;
+    p)
+      PKGS="$OPTARG"
+      ;;
+    n)
+      HOSTN="$OPTARG"
+      ;;
+    u)
+      USERNAME="$OPTARG"
+      ;;
+    h)
+      usage && exit 0
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument" >&2
+      usage && exit 1
+      ;;
+    \?)
+      echo "Invalid options: -$OPTARG" >&2
+      usage && exit 1
+      ;;
+  esac
 done
 shift $((OPTIND-1))
 
 if [[ -z "$DEVICE" ]]; then
-	usage && echo && die "-d <block device> is required" || die
+  usage && echo && die "-d <block device> is required" || die
 fi
 
 command -v haveged 1>/dev/null || die "haveged dependency is required"
@@ -68,17 +68,17 @@ command -v haveged 1>/dev/null || die "haveged dependency is required"
 (( EUID == 0 )) || die "this script must be run with root privileges"
 
 read -rs -p "Please enter a password to encrypt the root partition with: " BD_PW ||
-	die "couldn't get root partition password from input"
+  die "couldn't get root partition password from input"
 echo
 
 if [[ -z "$USERNAME" ]]; then
-	echo "Username not passed with -u flag"
-	read -r -p "Please enter a username for the user of the new system: " USERNAME ||
-		die "couldn't get username from input"
+  echo "Username not passed with -u flag"
+  read -r -p "Please enter a username for the user of the new system: " USERNAME ||
+    die "couldn't get username from input"
 fi
 
 read -rs -p "Please enter a password for user '$USERNAME': " USER_PW ||
-	die "couldn't get user password from input"
+  die "couldn't get user password from input"
 echo; echo
 
 ## Latest bootstrap image
@@ -168,20 +168,20 @@ unset SCRIPT
 sleep 1
 
 if [[ "$DESKTOP" == "lxde" ]]; then
-	SCRIPT=install-lxde
-	cp "$SCRIPT" "mnt/usr/bin/$SCRIPT"
-	root.x86_64/bin/arch-chroot mnt "$SCRIPT" ||
-		die "couldn't install lxde"
-	rm "mnt/usr/bin/$SCRIPT"
-	unset SCRIPT
+  SCRIPT=install-lxde
+  cp "$SCRIPT" "mnt/usr/bin/$SCRIPT"
+  root.x86_64/bin/arch-chroot mnt "$SCRIPT" ||
+    die "couldn't install lxde"
+  rm "mnt/usr/bin/$SCRIPT"
+  unset SCRIPT
 fi
 
 for SCRIPT in $@; do
-	cp "$SCRIPT" "mnt/usr/bin/$SCRIPT" ||
-		die "couldn't cp $SCRIPT"
-	root.x86_64/bin/arch-chroot mnt "$SCRIPT" ||
-		die "couldn't run $SCRIPT"
-	rm "mnt/usr/bin/$SCRIPT"
+  cp "$SCRIPT" "mnt/usr/bin/$SCRIPT" ||
+    die "couldn't cp $SCRIPT"
+  root.x86_64/bin/arch-chroot mnt "$SCRIPT" ||
+    die "couldn't run $SCRIPT"
+  rm "mnt/usr/bin/$SCRIPT"
 done
 unset SCRIPT
 
