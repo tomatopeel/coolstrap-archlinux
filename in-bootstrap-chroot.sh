@@ -5,17 +5,14 @@ die() {
 	echo "Exiting..." >&2; exit 1
 }
 
+read -r BD_PW
 DEVICE="$1"
-BD_PW="$2"
 
-echo -n "$BD_PW" | cryptsetup open "${DEVICE}2" cryptroot - ||
-  die "$LINENO: couldn't cryptsetup open ${DEVICE}2"
+echo -n "$BD_PW" | cryptsetup open "${DEVICE}1" cryptroot - ||
+  die "$LINENO: couldn't cryptsetup open ${DEVICE}1"
 
 mount /dev/mapper/cryptroot /mnt ||
   die "$LINENO: couldn't mount cryptroot to /mnt"
-
-mkdir /mnt/boot && mount "${DEVICE}1" /mnt/boot ||
-  die "$LINENO: couldn't mount ${DEVICE}1 to /mnt/boot"
 
 pacman-key --init
 pacman-key --populate archlinux
@@ -25,10 +22,9 @@ rankmirrors -n 3 /etc/pacman.d/mirrorlist.backup > /etc/pacman.d/mirrorlist
 
 pacman --noconfirm -Syuu
 
-PKGS="base arch-install-scripts sudo rsync"
+PKGS="base arch-install-scripts sudo"
 pacstrap /mnt $PKGS
 
-umount "${DEVICE}1" || die "couldn't umount ${DEVICE}1"
-umount /dev/mapper/cryptroot || die "couldn't umount cryptroot"
+umount "/dev/mapper/cryptroot" || die "couldn't umount cryptroot"
 
 exit 0

@@ -9,8 +9,8 @@ DEVICE="$1"
 TIMEZONE="$2"
 LOCALE="$3"
 HOSTN="$4"
-USERNAME="$5"
-PASSWORD="$6"
+USER_NAME="$5"
+read -r USER_PW
 
 ln -sf /usr/share/zoneinfo/"$TIMEZONE" /etc/localtime ||
   die "couldn't link timezone"
@@ -33,8 +33,9 @@ sed -i "${LN}iHOOKS=(base udev autodetect modconf block keymap keyboard encrypt 
 mkinitcpio -p linux || die "couldn't mkinitcpio"
 pacman -S --noconfirm grub || die "couldn't install grub package"
 
-UUID="$(blkid -s UUID "${DEVICE}2" | sed -e 's/^.*"\(.*\)"/\1/')"
+UUID="$(blkid -s UUID "${DEVICE}1" | sed -e 's/^.*"\(.*\)"/\1/')"
 sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\".*\"/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet cryptdevice=UUID=$UUID:cryptroot root=\/dev\/mapper\/cryptroot\"/" /etc/default/grub
+echo "GRUB_ENABLE_CRYPTODISK=y" >> /etc/default/grub
 
 grub-install --force --target=i386-pc "$DEVICE" ||
   die "couldn't install grub-install"
@@ -42,7 +43,7 @@ grub-install --force --target=i386-pc "$DEVICE" ||
 grub-mkconfig -o /boot/grub/grub.cfg ||
   die "couldn't grub-mkconfig"
 
-useradd -m -G wheel -s /bin/bash "$USERNAME"
+useradd -m -G wheel -s /bin/bash "$USER_NAME"
 echo "%wheel ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-echo "$USERNAME:$PASSWORD" | chpasswd &&
+echo "$USER_NAME:$USER_PW" | chpasswd &&
 	passwd -l root

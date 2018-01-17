@@ -16,7 +16,7 @@ usage() {
 	  -h            show this help text
 
 	  <scripts>  additional scripts to run from in chroot following install
-  EOF
+	EOF
   echo "$TEXT"
 }
 
@@ -25,7 +25,7 @@ DEVICE=
 DESKTOP=
 PKGS=
 HOSTN=
-USERNAME=
+USER_NAME=
 SCRIPTS=
 while getopts ":d:x:p:n:u:h" opt; do
   case $opt in
@@ -42,7 +42,7 @@ while getopts ":d:x:p:n:u:h" opt; do
       HOSTN="$OPTARG"
       ;;
     u)
-      USERNAME="$OPTARG"
+      USER_NAME="$OPTARG"
       ;;
     h)
       usage && exit 0
@@ -71,13 +71,13 @@ read -rs -p "Please enter a password to encrypt the root partition with: " BD_PW
   die "couldn't get root partition password from input"
 echo
 
-if [[ -z "$USERNAME" ]]; then
+if [[ -z "$USER_NAME" ]]; then
   echo "Username not passed with -u flag"
-  read -r -p "Please enter a username for the user of the new system: " USERNAME ||
+  read -r -p "Please enter a username for the user of the new system: " USER_NAME ||
     die "couldn't get username from input"
 fi
 
-read -rs -p "Please enter a password for user '$USERNAME': " USER_PW ||
+read -rs -p "Please enter a password for user '$USER_NAME': " USER_PW ||
   die "couldn't get user password from input"
 echo; echo
 
@@ -100,43 +100,32 @@ LN=$(grep -n "## Worldwide" \
 SEDEXP="$((LN+1)),$((LN+3)){s/#Server/Server/}"
 sed -i "$SEDEXP" root.x86_64/etc/pacman.d/mirrorlist
 
-## Extra sanity before wiping the disk
-echo "Preparing to securely wipe and re-partition $DEVICE"; echo
 printf "$DEVICE is:\n\n"
 fdisk -l "$DEVICE"
-echo; read -p "Are you sure? (y/n): " -n 1 -r; echo
+echo; read -p "Are you sure about over-writing this device? (y/n): " -n 1 -r; echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then die; fi
+echo; read -p "Are you sure you're sure about that? (y/n): " -n 1 -r; echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then die; fi
 
-#echo "Securely wiping $DEVICE with /dev/urandom"
-#dd if=/dev/urandom of="$DEVICE" status=progress && sync
-
 ## Format the disk. Unsure of sleep here, maybe sync?
-sfdisk "$DEVICE" << EOF || die "couldn't partition with sfdisk"
-1MiB,500MiB,L,*
--,-,L,-
+sfdisk "$DEVICE" << EOF && sync || die "couldn't partition with sfdisk"
+1MiB,-,L,*
 EOF
-sleep 1
 
-## Create filesystem on the boot partition
-mkfs.ext4 -F "${DEVICE}1" || die "$LINENO: couldn't mkfs"
-sleep 1
-
-## Create encrypted root partition
-echo -n "$BD_PW" | cryptsetup -v luksFormat "${DEVICE}2" - &&
-  echo -n "$BD_PW" | cryptsetup open "${DEVICE}2" cryptroot - &&
-  mkfs.ext4 /dev/mapper/cryptroot ||
-  die "$LINENO: couldn't cryptsetup/mkfs/mount ${DEVICE}2"
-
-## Need to close and re-open encrypted partition in the chroot script
-sleep 1
+## Create bootable encrypted root partition
+echo -n "$BD_PW" | cryptsetup -v luksFormat "${DEVICE}1" - &&
+  echo -n "$BD_PW" | cryptsetup open "${DEVICE}1" "cryptroot" - &&
+  mkfs.ext4 "/dev/mapper/cryptroot" ||
+  die "$LINENO: couldn't cryptsetup/mkfs/mount ${DEVICE}1"
+sleep 1 # get "remove ioctl on ... failed: device or resource busy w/o this
 cryptsetup close cryptroot
-sleep 1
-## Unsure of sleeps here
+
+CHROOT=root.x86_64/bin/arch-chroot
 
 ## Script passed to chroot into bootstrap image directory
 SCRIPT=in-bootstrap-chroot.sh
 cp "$SCRIPT" "root.x86_64/usr/bin/$SCRIPT"
-root.x86_64/bin/arch-chroot root.x86_64 "$SCRIPT" "$DEVICE" "$BD_PW" ||
+echo -n "$BD_PW" | "$CHROOT" root.x86_64 "$SCRIPT" "$DEVICE" ||
   die "$SCRIPT exited"
 rm "root.x86_64/usr/bin/$SCRIPT"
 unset SCRIPT
@@ -146,9 +135,7 @@ umount root.x86_64 >/dev/null 2>&1
 sleep 1
 
 mkdir mnt
-mount /dev/mapper/cryptroot mnt || die "couldn't mount ${DEVICE}2"
-sleep 1
-mount "${DEVICE}1" mnt/boot || die "couldn't mount ${DEVICE}1"
+mount "/dev/mapper/cryptroot" mnt || die "couldn't mount cryptroot"
 sleep 1
 
 root.x86_64/usr/bin/genfstab -U mnt > mnt/etc/fstab
@@ -160,8 +147,8 @@ LOCALE=$(locale | grep 'LANG=' | sed 's/LANG=//')
 ## Usual archlinux install procedure
 SCRIPT=in-new-sys-chroot.sh
 cp "$SCRIPT" mnt/usr/bin/"$SCRIPT"
-root.x86_64/bin/arch-chroot mnt "$SCRIPT" \
-  "$DEVICE" "$TIMEZONE" "$LOCALE" "$HOSTN" "$USERNAME" "$USER_PW"
+echo -n "$USER_PW" | "$CHROOT" mnt "$SCRIPT" \
+  "$DEVICE" "$TIMEZONE" "$LOCALE" "$HOSTN" "$USER_NAME"
 rm "mnt/usr/bin/$SCRIPT"
 unset SCRIPT
 
@@ -185,12 +172,11 @@ for SCRIPT in $@; do
 done
 unset SCRIPT
 
-umount "${DEVICE}1" || die "couldn't umount ${DEVICE}1"
-sleep 1
-umount /dev/mapper/cryptroot || die "couldn't umount ${DEVICE}2"
-sleep 1
-umount mnt >/dev/null 2>&1
+umount /dev/mapper/cryptroot || die "couldn't umount /dev/mapper/cryptroot"
 cryptsetup close cryptroot || die "couldn't close cryptroot"
+sleep 1
+
+umount mnt >/dev/null 2>&1
 
 echo
 echo "Voila!"
