@@ -33,8 +33,8 @@ sed -i "${LN}iHOOKS=(base udev autodetect modconf block keymap keyboard encrypt 
 mkinitcpio -p linux || die "couldn't mkinitcpio"
 pacman -S --noconfirm grub || die "couldn't install grub package"
 
-UUID="$(blkid -s UUID "${DEVICE}2" | sed -e 's/^.*"\(.*\)"/\1/')"
-sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\".*\"/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet cryptdevice=UUID=$UUID:part2 root=\/dev\/mapper\/part2\"/" /etc/default/grub
+UUID="$(blkid -s UUID "${DEVICE}1" | sed -e 's/^.*"\(.*\)"/\1/')"
+sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\".*\"/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet cryptdevice=UUID=$UUID:cryptroot root=\/dev\/mapper\/cryptroot\"/" /etc/default/grub
 echo "GRUB_ENABLE_CRYPTODISK=y" >> /etc/default/grub
 
 grub-install --force --target=i386-pc "$DEVICE" ||
