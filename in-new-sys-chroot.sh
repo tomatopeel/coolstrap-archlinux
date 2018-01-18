@@ -30,6 +30,10 @@ LN="$(grep -n '^HOOKS=' /etc/mkinitcpio.conf | cut -d: -f1)"
 sed -i "${LN}d" /etc/mkinitcpio.conf
 sed -i "${LN}iHOOKS=(base udev autodetect modconf block keymap keyboard encrypt filesystems fsck)" /etc/mkinitcpio.conf
 
+LN="$(grep -n '^MODULES=' /etc/mkinitcpio.conf | cut -d: -f1)"
+sed -i "${LN}d" /etc/mkinitcpio.conf
+sed -i "${LN}iMODULES=(virtio virtio_blk virtio_pci virtio_net)" /etc/mkinitcpio.conf
+
 mkinitcpio -p linux || die "couldn't mkinitcpio"
 pacman -S --noconfirm grub || die "couldn't install grub package"
 
