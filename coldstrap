@@ -51,7 +51,7 @@ while getopts ":d:m:n:u:h" opt; do
       DEVICE="$OPTARG"
       ;;
     m)
-      MOUNT_POINT="$OPTARG"
+      MOUNT_POINT="${OPTARG%/}"
       ;;
     n)
       HOSTN="$OPTARG"
@@ -162,8 +162,8 @@ sleep 1
 "$ROOT/usr/bin/genfstab" -U mnt > mnt/etc/fstab
 
 ## Use timezone and locale of host
-TIMEZONE=$(timedatectl | grep 'Time zone' | awk '{print $3}')
-LOCALE=$(locale | grep 'LANG=' | sed 's/LANG=//')
+TIMEZONE="$(timedatectl | grep 'Time zone' | awk '{print $3}')"
+LOCALE="$(echo "$LANG" | sed 's/\..*$/\.UTF-8/')"
 
 ## Usual archlinux install procedure
 SCRIPT=in-new-sys-chroot.sh

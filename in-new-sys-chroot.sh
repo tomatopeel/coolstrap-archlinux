@@ -17,12 +17,13 @@ ln -sf /usr/share/zoneinfo/"$TIMEZONE" /etc/localtime ||
 
 hwclock --systohc || die "couldn't hwclock"
 
-cat /etc/locale.gen | grep "$LOCALE"
-sed -i "s/#$LOCALE/$LOCALE/" /etc/locale.gen ||
+LN="$(grep -in "^#$LOCALE" /etc/locale.gen | cut -d: -f1)"
+sed -i "${LN}s/^#//" /etc/locale.gen ||
   die "couldn't sed locale"
 
-cat /etc/locale.gen | grep "$LOCALE"
 echo "LANG=$LOCALE" > /etc/locale.conf
+
+locale-gen || die "couldn't locale-gen"
 
 echo "$HOSTN" > /etc/hostname 
 
