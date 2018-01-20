@@ -7,36 +7,51 @@ die() {
 
 usage() {
   read -r -d '' TEXT <<-EOF
-	Usage: $0 -d <bd> [ -x <de> -p <pkgs> -u <user> <scripts> ]
-	  -d <bd>       block device to operate on
-	  -x <de>       desktop environment, from: lxde (todo: add more)
-	  -p <pkgs>     additional packages to install from arch repo's
-	  -n <hostname> system hostname
-	  -u <user>     user username
-	  -h            show this help text
+	Usage: $0 OPTS SCRIPTS...
+	
+	  OPTS:
+	    -d <device>   block device to operate on
+	    -m <path>     mount point
+	    -n <hostname> system hostname
+	    -u <user>     user username
+	    -h            show this help text
 
-	  <scripts>  additional scripts to run from in chroot following install
+	  SCRIPTS
+	    scripts to run in chroot
 	EOF
   echo "$TEXT"
 }
 
+## Latest bootstrap image
+DATE=$(date -d now '+%Y.%m')
+MIRRURL=https://mirrors.kernel.org/archlinux/iso/latest
+TARBALL=archlinux-bootstrap-"$DATE".01-x86_64.tar.gz
+ROOT=root.x86_64
+CHROOT="$ROOT/bin/arch-chroot"
+
+## Download and untar the bootstrap image
+ensure_bootstrap_path() {
+  if [ ! -d "$ROOT" ]; then
+    if [ ! -f "$TARBALL" ]; then
+      curl -O "$MIRRURL/$TARBALL" || die "$LINENO: curl failed"
+    fi
+    tar xzf "$TARBALL" || die "$LINENO: tar failed"
+  fi
+}
+
 OPTIND=1
 DEVICE=
-DESKTOP=
-PKGS=
+MOUNT_POINT=
 HOSTN=
 USER_NAME=
 SCRIPTS=
-while getopts ":d:x:p:n:u:h" opt; do
+while getopts ":d:m:n:u:h" opt; do
   case $opt in
     d)
       DEVICE="$OPTARG"
       ;;
-    x)
-      DESKTOP="$OPTARG"
-      ;;
-    p)
-      PKGS="$OPTARG"
+    m)
+      MOUNT_POINT="$OPTARG"
       ;;
     n)
       HOSTN="$OPTARG"
@@ -58,6 +73,26 @@ while getopts ":d:x:p:n:u:h" opt; do
   esac
 done
 shift $((OPTIND-1))
+
+ensure_bootstrap_path || die
+
+if [[ ! -z "$MOUNT_POINT" ]]; then
+  for SCRIPT in "$@"; do
+    if [[ ! -f "$SCRIPT" ]]; then
+      die "$SCRIPT not found!"
+    elif [[ ! -x "$SCRIPT" ]]; then
+      die "$SCRIPT needs +x!"
+    fi
+    cp "$SCRIPT" "$MOUNT_POINT/bin/${SCRIPT##*/}" ||
+      die "couldn't cp $SCRIPT"
+    "$CHROOT" "$MOUNT_POINT" "${SCRIPT##*/}" "$USER_NAME" ||
+      die "$SCRIPT failed"
+    rm "$MOUNT_POINT/bin/${SCRIPT##*/}" ||
+      die "couldn't rm $SCRIPT"
+  done
+  echo; echo "chroot injector finished!"
+  exit 0
+fi
 
 if [[ -z "$DEVICE" ]]; then
   usage && echo && die "-d <block device> is required" || die
@@ -81,24 +116,11 @@ read -rs -p "Please enter a password for user '$USER_NAME': " USER_PW ||
   die "couldn't get user password from input"
 echo; echo
 
-## Latest bootstrap image
-DATE=$(date -d now '+%Y.%m')
-MIRRURL=https://mirrors.kernel.org/archlinux/iso/latest
-TARBALL=archlinux-bootstrap-"$DATE".01-x86_64.tar.gz
-
-## Download and untar the bootstrap image
-if [ ! -d "root.x86_64" ]; then
-  if [ ! -f "$TARBALL" ]; then
-    curl -O "$MIRRURL/$TARBALL" || die "$LINENO: curl failed"
-  fi
-  tar xzf "$TARBALL" || die "$LINENO: tar failed"
-fi
-
 ## Select some repo mirrors in the bootstrap image
 LN=$(grep -n "## Worldwide" \
-  root.x86_64/etc/pacman.d/mirrorlist | cut -d: -f1)
+  $ROOT/etc/pacman.d/mirrorlist | cut -d: -f1)
 SEDEXP="$((LN+1)),$((LN+3)){s/#Server/Server/}"
-sed -i "$SEDEXP" root.x86_64/etc/pacman.d/mirrorlist
+sed -i "$SEDEXP" $ROOT/etc/pacman.d/mirrorlist
 
 printf "$DEVICE is:\n\n"
 fdisk -l "$DEVICE"
@@ -120,25 +142,24 @@ echo -n "$BD_PW" | cryptsetup -v luksFormat "${DEVICE}1" - &&
 sleep 1 # get "remove ioctl on ... failed: device or resource busy w/o this
 cryptsetup close cryptroot
 
-CHROOT=root.x86_64/bin/arch-chroot
 
 ## Script passed to chroot into bootstrap image directory
 SCRIPT=in-bootstrap-chroot.sh
-cp "$SCRIPT" "root.x86_64/usr/bin/$SCRIPT"
-echo -n "$BD_PW" | "$CHROOT" root.x86_64 "$SCRIPT" "$DEVICE" ||
+cp "$SCRIPT" "$ROOT/usr/bin/$SCRIPT"
+echo -n "$BD_PW" | "$CHROOT" "$ROOT" "$SCRIPT" "$DEVICE" ||
   die "$SCRIPT exited"
-rm "root.x86_64/usr/bin/$SCRIPT"
+rm "$ROOT/usr/bin/$SCRIPT"
 unset SCRIPT
 sleep 1
 
-umount root.x86_64 >/dev/null 2>&1 
+umount "$ROOT" >/dev/null 2>&1
 sleep 1
 
 mkdir mnt
 mount "/dev/mapper/cryptroot" mnt || die "couldn't mount cryptroot"
 sleep 1
 
-root.x86_64/usr/bin/genfstab -U mnt > mnt/etc/fstab
+"$ROOT/usr/bin/genfstab" -U mnt > mnt/etc/fstab
 
 ## Use timezone and locale of host
 TIMEZONE=$(timedatectl | grep 'Time zone' | awk '{print $3}')
@@ -151,26 +172,7 @@ echo -n "$USER_PW" | "$CHROOT" mnt "$SCRIPT" \
   "$DEVICE" "$TIMEZONE" "$LOCALE" "$HOSTN" "$USER_NAME"
 rm "mnt/usr/bin/$SCRIPT"
 unset SCRIPT
-
 sleep 1
-
-if [[ "$DESKTOP" == "lxde" ]]; then
-  SCRIPT=install-lxde
-  cp "$SCRIPT" "mnt/usr/bin/$SCRIPT"
-  root.x86_64/bin/arch-chroot mnt "$SCRIPT" ||
-    die "couldn't install lxde"
-  rm "mnt/usr/bin/$SCRIPT"
-  unset SCRIPT
-fi
-
-for SCRIPT in $@; do
-  cp "$SCRIPT" "mnt/usr/bin/$SCRIPT" ||
-    die "couldn't cp $SCRIPT"
-  root.x86_64/bin/arch-chroot mnt "$SCRIPT" ||
-    die "couldn't run $SCRIPT"
-  rm "mnt/usr/bin/$SCRIPT"
-done
-unset SCRIPT
 
 umount /dev/mapper/cryptroot || die "couldn't umount /dev/mapper/cryptroot"
 cryptsetup close cryptroot || die "couldn't close cryptroot"
