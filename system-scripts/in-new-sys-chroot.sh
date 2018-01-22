@@ -9,6 +9,7 @@ DEVICE="$1"
 TIMEZONE="$2"
 LOCALE="$3"
 HOST_NAME="$4"
+CRYPTROOT="$5"
 
 ln -sf /usr/share/zoneinfo/"$TIMEZONE" /etc/localtime ||
   die "couldn't link timezone"
@@ -37,7 +38,7 @@ mkinitcpio -p linux || die "couldn't mkinitcpio"
 pacman -S --noconfirm grub || die "couldn't install grub package"
 
 UUID="$(blkid -s UUID "${DEVICE}1" | sed -e 's/^.*"\(.*\)"/\1/')"
-sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\".*\"/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet cryptdevice=UUID=$UUID:cryptroot root=\/dev\/mapper\/cryptroot\"/" /etc/default/grub
+sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\".*\"/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet cryptdevice=UUID=$UUID:$CRYPTROOT root=\/dev\/mapper\/$CRYPTROOT\"/" /etc/default/grub
 echo "GRUB_ENABLE_CRYPTODISK=y" >> /etc/default/grub
 
 grub-install --force --target=i386-pc "$DEVICE" ||

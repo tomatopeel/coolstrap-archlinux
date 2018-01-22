@@ -7,12 +7,13 @@ die() {
 
 read -r BD_PW
 DEVICE="$1"
+CRYPTROOT="$2"
 
-echo -n "$BD_PW" | cryptsetup open "${DEVICE}1" cryptroot - ||
+echo -n "$BD_PW" | cryptsetup open "${DEVICE}1" "$CRYPTROOT" - ||
   die "$LINENO: couldn't cryptsetup open ${DEVICE}1"
 
-mount /dev/mapper/cryptroot /mnt ||
-  die "$LINENO: couldn't mount cryptroot to /mnt"
+mount "/dev/mapper/$CRYPTROOT" /mnt ||
+  die "$LINENO: couldn't mount $CRYPTROOT to /mnt"
 
 pacman-key --init
 pacman-key --populate archlinux
@@ -25,6 +26,6 @@ pacman --noconfirm -Syuu
 PKGS="base arch-install-scripts sudo"
 pacstrap /mnt $PKGS
 
-umount "/dev/mapper/cryptroot" || die "couldn't umount cryptroot"
+umount "/dev/mapper/$CRYPTROOT" || die "couldn't umount $CRYPTROOT"
 
 exit 0

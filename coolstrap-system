@@ -98,18 +98,22 @@ sfdisk "$DEVICE" << EOF && sync || die "couldn't partition with sfdisk"
 1MiB,-,L,*
 EOF
 
+if [[ -z "$CRYPTROOT" ]]; then
+  CRYPTROOT=cryptroot
+fi
+
 ## Create bootable encrypted root partition
 echo -n "$BD_PW" | cryptsetup -v luksFormat "${DEVICE}1" - &&
-  echo -n "$BD_PW" | cryptsetup open "${DEVICE}1" "cryptroot" - &&
-  mkfs.ext4 "/dev/mapper/cryptroot" ||
+  echo -n "$BD_PW" | cryptsetup open "${DEVICE}1" "$CRYPTROOT" - &&
+  mkfs.ext4 "/dev/mapper/$CRYPTROOT" ||
   die "$LINENO: couldn't cryptsetup/mkfs/mount ${DEVICE}1"
 sleep 1 # get "remove ioctl on ... failed: device or resource busy w/o this
-cryptsetup close cryptroot
+cryptsetup close "$CRYPTROOT"
 
 ## Script passed to chroot into bootstrap image directory
 SCRIPT=system-scripts/in-bootstrap-chroot.sh
 cp "$SCRIPT" "$ROOT/bin/${SCRIPT##*/}"
-echo -n "$BD_PW" | "$CHROOT" "$ROOT" "${SCRIPT##*/}" "$DEVICE" ||
+echo -n "$BD_PW" | "$CHROOT" "$ROOT" "${SCRIPT##*/}" "$DEVICE" "$CRYPTROOT" ||
   die "$SCRIPT exited"
 rm "$ROOT/bin/${SCRIPT##*/}"
 unset SCRIPT
@@ -119,7 +123,7 @@ umount "$ROOT" >/dev/null 2>&1
 sleep 1
 
 mkdir mnt
-mount "/dev/mapper/cryptroot" mnt || die "couldn't mount cryptroot"
+mount "/dev/mapper/$CRYPTROOT" mnt || die "couldn't mount $CRYPTROOT"
 sleep 1
 
 "$ROOT/usr/bin/genfstab" -U mnt > mnt/etc/fstab
@@ -132,13 +136,13 @@ LOCALE="$(echo "$LANG" | sed 's/\..*$/\.UTF-8/')"
 SCRIPT=system-scripts/in-new-sys-chroot.sh
 cp "$SCRIPT" "mnt/bin/${SCRIPT##*/}"
 "$CHROOT" mnt "${SCRIPT##*/}" \
-  "$DEVICE" "$TIMEZONE" "$LOCALE" "$HOST_NAME"
+  "$DEVICE" "$TIMEZONE" "$LOCALE" "$HOST_NAME" "$CRYPTROOT"
 rm "mnt/bin/${SCRIPT##*/}"
 unset SCRIPT
 sleep 1
 
-umount /dev/mapper/cryptroot || die "couldn't umount /dev/mapper/cryptroot"
-cryptsetup close cryptroot || die "couldn't close cryptroot"
+umount "/dev/mapper/$CRYPTROOT" || die "couldn't umount /dev/mapper/$CRYPTROOT"
+cryptsetup close "$CRYPTROOT" || die "couldn't close $CRYPTROOT"
 sleep 1
 
 umount mnt >/dev/null 2>&1
