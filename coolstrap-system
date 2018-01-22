@@ -72,13 +72,13 @@ command -v haveged 1>/dev/null || die "haveged dependency is required"
 
 (( EUID == 0 )) || die "this script must be run with root privileges"
 
-ensure_bootstrap_path || die
-
 read -rs -p "Password/phrase to encrypt the root partition with: " BD_PW || die
 echo; read -rs -p "Confirm password/phrase: " || die
 if [[ ! $REPLY = $BD_PW ]]; then
   die "Password/phrase mismatch"
 fi
+
+ensure_bootstrap_path || die
 
 # Select some repo mirrors in the bootstrap image
 LN=$(grep -n "## Worldwide" \

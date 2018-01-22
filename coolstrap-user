@@ -111,9 +111,14 @@ inject_user_script() {
     die "couldn't rm $SCRIPT"
 }
 
+#user_exists() {
+#  "$CHROOT" "$MOUNT_POINT" "id -u $USER_NAME"
+#  return "$?"
+#}
+
 ## if user not exisiting create user and sudo it
 ## user will become a sudo user
-if [[ ! "$(id -u "$USER_NAME")" ]]; then
+if [[ ! "$("$CHROOT" "$MOUNT_POINT" id -u "$USER_NAME")" ]]; then
   inject_root_script system-scripts/new-user.sh "$USER_NAME"
 fi
  
