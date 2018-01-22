@@ -11,11 +11,9 @@ usage() {
 	
 	  OPTS:
 	    -d <device>   block device to operate on
-	    -m <path>     mount point
-	    -n <hostname> system hostname
 	    -u <user>     user username
 	    -h            show this help text
-
+	
 	  SCRIPTS
 	    scripts to run in chroot
 	EOF
@@ -41,20 +39,12 @@ ensure_bootstrap_path() {
 
 OPTIND=1
 DEVICE=
-MOUNT_POINT=
-HOSTN=
 USER_NAME=
 SCRIPTS=
-while getopts ":d:m:n:u:h" opt; do
+while getopts ":d:u:h" opt; do
   case $opt in
     d)
       DEVICE="$OPTARG"
-      ;;
-    m)
-      MOUNT_POINT="${OPTARG%/}"
-      ;;
-    n)
-      HOSTN="$OPTARG"
       ;;
     u)
       USER_NAME="$OPTARG"
@@ -73,112 +63,67 @@ while getopts ":d:m:n:u:h" opt; do
   esac
 done
 shift $((OPTIND-1))
-
-ensure_bootstrap_path || die
-
-if [[ ! -z "$MOUNT_POINT" ]]; then
-  for SCRIPT in "$@"; do
-    if [[ ! -f "$SCRIPT" ]]; then
-      die "$SCRIPT not found!"
-    elif [[ ! -x "$SCRIPT" ]]; then
-      die "$SCRIPT needs +x!"
-    fi
-    cp "$SCRIPT" "$MOUNT_POINT/bin/${SCRIPT##*/}" ||
-      die "couldn't cp $SCRIPT"
-    "$CHROOT" "$MOUNT_POINT" "${SCRIPT##*/}" "$USER_NAME" ||
-      die "$SCRIPT failed"
-    rm "$MOUNT_POINT/bin/${SCRIPT##*/}" ||
-      die "couldn't rm $SCRIPT"
-  done
-  echo; echo "chroot injector finished!"
-  exit 0
-fi
-
-if [[ -z "$DEVICE" ]]; then
-  usage && echo && die "-d <block device> is required" || die
-fi
-
-command -v haveged 1>/dev/null || die "haveged dependency is required"
+SCRIPTS="$@"
 
 (( EUID == 0 )) || die "this script must be run with root privileges"
 
-read -rs -p "Please enter a password to encrypt the root partition with: " BD_PW ||
-  die "couldn't get root partition password from input"
-echo
-
-if [[ -z "$USER_NAME" ]]; then
-  echo "Username not passed with -u flag"
-  read -r -p "Please enter a username for the user of the new system: " USER_NAME ||
-    die "couldn't get username from input"
+if [[ -z "$DEVICE" || -z "$USER_NAME" ]]; then
+  die "-d <device> and -u <username> required"
 fi
 
-read -rs -p "Please enter a password for user '$USER_NAME': " USER_PW ||
-  die "couldn't get user password from input"
-echo; echo
+ensure_bootstrap_path || die
 
-## Select some repo mirrors in the bootstrap image
-LN=$(grep -n "## Worldwide" \
-  $ROOT/etc/pacman.d/mirrorlist | cut -d: -f1)
-SEDEXP="$((LN+1)),$((LN+3)){s/#Server/Server/}"
-sed -i "$SEDEXP" $ROOT/etc/pacman.d/mirrorlist
+MOUNT_POINT=mnt
+if [[ ! -d "$MOUNT_POINT" ]]; then mkdir "$MOUNT_POINT" || die; fi
 
-printf "$DEVICE is:\n\n"
-fdisk -l "$DEVICE"
-echo; read -p "Are you sure about over-writing this device? (y/n): " -n 1 -r; echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then die; fi
-echo; read -p "Are you sure you're sure about that? (y/n): " -n 1 -r; echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then die; fi
+cryptsetup open "${DEVICE}1" cryptroot &&
+  mount /dev/mapper/cryptroot "$MOUNT_POINT" || die
 
-## Format the disk. Unsure of sleep here, maybe sync?
-sfdisk "$DEVICE" << EOF && sync || die "couldn't partition with sfdisk"
-1MiB,-,L,*
-EOF
+inject_root_script() {
+  SCRIPT="$1"
+  shift
+  if [[ ! -f "$SCRIPT" ]]; then
+    die "$SCRIPT not found!"
+  elif [[ ! -x "$SCRIPT" ]]; then
+    die "$SCRIPT needs +x!"
+  fi
+  cp "$SCRIPT" "$MOUNT_POINT/bin/${SCRIPT##*/}" ||
+    die "couldn't cp $SCRIPT"
+  "$CHROOT" "$MOUNT_POINT" "${SCRIPT##*/}" "$@" ||
+    die "$SCRIPT failed"
+  rm "$MOUNT_POINT/bin/${SCRIPT##*/}" ||
+    die "couldn't rm $SCRIPT"
+}
 
-## Create bootable encrypted root partition
-echo -n "$BD_PW" | cryptsetup -v luksFormat "${DEVICE}1" - &&
-  echo -n "$BD_PW" | cryptsetup open "${DEVICE}1" "cryptroot" - &&
-  mkfs.ext4 "/dev/mapper/cryptroot" ||
-  die "$LINENO: couldn't cryptsetup/mkfs/mount ${DEVICE}1"
-sleep 1 # get "remove ioctl on ... failed: device or resource busy w/o this
-cryptsetup close cryptroot
+inject_user_script() {
+  SCRIPT="$1"
+  shift
+  if [[ ! -f "$SCRIPT" ]]; then
+    die "$SCRIPT not found!"
+  elif [[ ! -x "$SCRIPT" ]]; then
+    die "$SCRIPT needs +x!"
+  fi
+  cp "$SCRIPT" "$MOUNT_POINT/bin/${SCRIPT##*/}" ||
+    die "couldn't cp $SCRIPT"
+  "$CHROOT" "$MOUNT_POINT" su - "$USER_NAME" -c "${SCRIPT##*/} $@" ||
+    die "$SCRIPT failed"
+  rm "$MOUNT_POINT/bin/${SCRIPT##*/}" ||
+    die "couldn't rm $SCRIPT"
+}
 
+## if user not exisiting create user and sudo it
+## user will become a sudo user
+if [[ ! "$(id -u "$USER_NAME")" ]]; then
+  inject_root_script system-scripts/new-user.sh "$USER_NAME"
+fi
+ 
+## user scripts, user is sudo so can do sudo stuff
+for SCRIPT in "$SCRIPTS"; do
+  inject_user_script "$SCRIPT"
+done
 
-## Script passed to chroot into bootstrap image directory
-SCRIPT=in-bootstrap-chroot.sh
-cp "$SCRIPT" "$ROOT/usr/bin/$SCRIPT"
-echo -n "$BD_PW" | "$CHROOT" "$ROOT" "$SCRIPT" "$DEVICE" ||
-  die "$SCRIPT exited"
-rm "$ROOT/usr/bin/$SCRIPT"
-unset SCRIPT
-sleep 1
+umount /dev/mapper/cryptroot || die
+cryptsetup close cryptroot || die
 
-umount "$ROOT" >/dev/null 2>&1
-sleep 1
-
-mkdir mnt
-mount "/dev/mapper/cryptroot" mnt || die "couldn't mount cryptroot"
-sleep 1
-
-"$ROOT/usr/bin/genfstab" -U mnt > mnt/etc/fstab
-
-## Use timezone and locale of host
-TIMEZONE="$(timedatectl | grep 'Time zone' | awk '{print $3}')"
-LOCALE="$(echo "$LANG" | sed 's/\..*$/\.UTF-8/')"
-
-## Usual archlinux install procedure
-SCRIPT=in-new-sys-chroot.sh
-cp "$SCRIPT" mnt/usr/bin/"$SCRIPT"
-echo -n "$USER_PW" | "$CHROOT" mnt "$SCRIPT" \
-  "$DEVICE" "$TIMEZONE" "$LOCALE" "$HOSTN" "$USER_NAME"
-rm "mnt/usr/bin/$SCRIPT"
-unset SCRIPT
-sleep 1
-
-umount /dev/mapper/cryptroot || die "couldn't umount /dev/mapper/cryptroot"
-cryptsetup close cryptroot || die "couldn't close cryptroot"
-sleep 1
-
-umount mnt >/dev/null 2>&1
-
-echo
-echo "Voila!"
+echo; echo "chroot injector finished!"
+exit 0

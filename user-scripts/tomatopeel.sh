@@ -5,18 +5,30 @@ die() {
   echo "Exiting..." >&2; exit 1
 }
 
-PKGS="networkmanager i3 xorg xorg-xinit"
-pacman -S --noconfirm $PKGS | die
+PKGS="networkmanager i3-gaps i3blocks i3lock i3status xorg xorg-xinit git rxvt-unicode network-manager-applet"
+sudo pacman -S --noconfirm --needed $PKGS || die
 
-systemctl enable NetworkManager
+sudo systemctl enable NetworkManager
 
-USER_NAME="$1"
-HOME="/home/$USER_NAME"
-
-if [[ ! -d "$HOME" ]]; then
-  die "$HOME not found"
+if [[ ! -d ~/dotfiles ]]; then
+  git clone https://github.com/tomatopeel/dotfiles
 fi
 
-git clone 
+shopt -s dotglob
+for f in ~/dotfiles/*; do
+  if [[ -f "$HOME/${f##*/}" ]]; then
+    rm -f "$HOME/${f##*/}"
+  fi
+  ln -s "$f" "$HOME/${f##*/}"
+done
 
-chown -R "$USER_NAME:$USER_NAME" "$HOME"
+#USER_NAME="$1"
+#HOME="/home/$USER_NAME"
+#
+#if [[ ! -d "$HOME" ]]; then
+#  die "$HOME not found"
+#fi
+#
+#git clone 
+#
+#chown -R "$USER_NAME:$USER_NAME" "$HOME"

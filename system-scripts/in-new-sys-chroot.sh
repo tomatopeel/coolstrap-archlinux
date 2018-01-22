@@ -8,9 +8,7 @@ die() {
 DEVICE="$1"
 TIMEZONE="$2"
 LOCALE="$3"
-HOSTN="$4"
-USER_NAME="$5"
-read -r USER_PW
+HOST_NAME="$4"
 
 ln -sf /usr/share/zoneinfo/"$TIMEZONE" /etc/localtime ||
   die "couldn't link timezone"
@@ -25,7 +23,7 @@ echo "LANG=$LOCALE" > /etc/locale.conf
 
 locale-gen || die "couldn't locale-gen"
 
-echo "$HOSTN" > /etc/hostname 
+echo "$HOST_NAME" > /etc/hostname 
 
 LN="$(grep -n '^HOOKS=' /etc/mkinitcpio.conf | cut -d: -f1)"
 sed -i "${LN}d" /etc/mkinitcpio.conf
@@ -48,7 +46,5 @@ grub-install --force --target=i386-pc "$DEVICE" ||
 grub-mkconfig -o /boot/grub/grub.cfg ||
   die "couldn't grub-mkconfig"
 
-useradd -m -G wheel -s /bin/bash "$USER_NAME"
-echo "%wheel ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-echo "$USER_NAME:$USER_PW" | chpasswd &&
-	passwd -l root
+passwd -l root || die
+echo "%wheel ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers || die
