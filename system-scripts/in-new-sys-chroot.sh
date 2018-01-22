@@ -28,11 +28,16 @@ echo "$HOST_NAME" > /etc/hostname
 
 LN="$(grep -n '^HOOKS=' /etc/mkinitcpio.conf | cut -d: -f1)"
 sed -i "${LN}d" /etc/mkinitcpio.conf
-sed -i "${LN}iHOOKS=(base udev autodetect modconf block keymap keyboard encrypt filesystems fsck)" /etc/mkinitcpio.conf
+sed -i "${LN}iHOOKS=(base udev autodetect modconf keyboard keymap block encrypt filesystems fsck)" /etc/mkinitcpio.conf
 
 LN="$(grep -n '^MODULES=' /etc/mkinitcpio.conf | cut -d: -f1)"
 sed -i "${LN}d" /etc/mkinitcpio.conf
-sed -i "${LN}iMODULES=(virtio virtio_blk virtio_pci virtio_net)" /etc/mkinitcpio.conf
+sed -i "${LN}iMODULES=(ext4 virtio virtio_blk virtio_pci virtio_net)" /etc/mkinitcpio.conf
+
+dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin || die
+chmod 000 /crypto_keyfile.bin || die
+chmod 600 /boot/initramfs-linux* || die
+cryptsetup luksAddKey "${DEVICE}1" /crypto_keyfile.bin || die
 
 mkinitcpio -p linux || die "couldn't mkinitcpio"
 pacman -S --noconfirm grub || die "couldn't install grub package"
