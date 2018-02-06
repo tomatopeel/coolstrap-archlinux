@@ -5,7 +5,7 @@ die() {
   echo "Exiting..." >&2; exit 1
 }
 
-PKGS="networkmanager i3-gaps i3blocks i3lock i3status xorg xorg-xinit git rxvt-unicode network-manager-applet rofi ttf-ubuntu-font-family ttf-font-awesome pass autocutsel"
+PKGS="networkmanager i3-gaps i3blocks i3lock i3status xorg xorg-xinit git rxvt-unicode network-manager-applet rofi ttf-ubuntu-font-family ttf-font-awesome pass autocutsel gnome-keyring chromium gtk2"
 sudo pacman -S --noconfirm --needed $PKGS || die
 
 sudo systemctl enable NetworkManager

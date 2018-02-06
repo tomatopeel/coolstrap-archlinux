@@ -23,7 +23,7 @@ rankmirrors -n 3 /etc/pacman.d/mirrorlist.backup > /etc/pacman.d/mirrorlist
 
 pacman --noconfirm -Syuu
 
-PKGS="base arch-install-scripts sudo"
+PKGS="base base-devel arch-install-scripts sudo"
 pacstrap /mnt $PKGS
 
 umount "/dev/mapper/$CRYPTROOT" || die "couldn't umount $CRYPTROOT"

@@ -34,6 +34,10 @@ LN="$(grep -n '^MODULES=' /etc/mkinitcpio.conf | cut -d: -f1)"
 sed -i "${LN}d" /etc/mkinitcpio.conf
 sed -i "${LN}iMODULES=(ext4 virtio virtio_blk virtio_pci virtio_net)" /etc/mkinitcpio.conf
 
+LN="$(grep -n '^FILES=' /etc/mkinitcpio.conf | cut -d: -f1)"
+sed -i "${LN}d" /etc/mkinitcpio.conf
+sed -i "${LN}iFILES=(/crypto_keyfile.bin)" /etc/mkinitcpio.conf
+
 dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin || die
 chmod 000 /crypto_keyfile.bin || die
 chmod 600 /boot/initramfs-linux* || die
