@@ -38,13 +38,13 @@ ensure_bootstrap_path() {
 }
 
 OPTIND=1
-DEVICE=
+PART=
 USER_NAME=
 SCRIPTS=
-while getopts ":d:u:h" opt; do
+while getopts ":p:u:h" opt; do
   case $opt in
-    d)
-      DEVICE="$OPTARG"
+    p)
+      PART="$OPTARG"
       ;;
     u)
       USER_NAME="$OPTARG"
@@ -67,8 +67,8 @@ SCRIPTS="$@"
 
 (( EUID == 0 )) || die "this script must be run with root privileges"
 
-if [[ -z "$DEVICE" || -z "$USER_NAME" ]]; then
-  die "-d <device> and -u <username> required"
+if [[ -z "$PART" || -z "$USER_NAME" ]]; then
+  die "-p <partition> and -u <username> required"
 fi
 
 ensure_bootstrap_path || die
@@ -76,7 +76,7 @@ ensure_bootstrap_path || die
 MOUNT_POINT=mnt
 if [[ ! -d "$MOUNT_POINT" ]]; then mkdir "$MOUNT_POINT" || die; fi
 
-cryptsetup open "${DEVICE}1" cryptroot &&
+cryptsetup open "$PART" cryptroot &&
   mount /dev/mapper/cryptroot "$MOUNT_POINT" || die
 
 inject_root_script() {

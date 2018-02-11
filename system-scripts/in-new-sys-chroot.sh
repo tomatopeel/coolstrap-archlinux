@@ -11,6 +11,13 @@ LOCALE="$3"
 HOST_NAME="$4"
 CRYPTROOT="$5"
 
+PART=
+if [[ "$DEVICE" =~ .*nbd[0-9] ]]; then
+  PART="${DEVICE}p1"
+else
+  PART="${DEVICE}1"
+fi
+
 ln -sf /usr/share/zoneinfo/"$TIMEZONE" /etc/localtime ||
   die "couldn't link timezone"
 
@@ -41,12 +48,12 @@ sed -i "${LN}iFILES=(/crypto_keyfile.bin)" /etc/mkinitcpio.conf
 dd bs=512 count=4 if=/dev/urandom of=/crypto_keyfile.bin || die
 chmod 000 /crypto_keyfile.bin || die
 chmod 600 /boot/initramfs-linux* || die
-cryptsetup luksAddKey "${DEVICE}1" /crypto_keyfile.bin || die
+#cryptsetup luksAddKey "$PART" /crypto_keyfile.bin || die
 
 mkinitcpio -p linux || die "couldn't mkinitcpio"
 pacman -S --noconfirm grub || die "couldn't install grub package"
 
-UUID="$(blkid -s UUID "${DEVICE}1" | sed -e 's/^.*"\(.*\)"/\1/')"
+UUID="$(blkid -s UUID "$PART" | sed -e 's/^.*"\(.*\)"/\1/')"
 sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\".*\"/GRUB_CMDLINE_LINUX_DEFAULT=\"quiet cryptdevice=UUID=$UUID:$CRYPTROOT root=\/dev\/mapper\/$CRYPTROOT\"/" /etc/default/grub
 echo "GRUB_ENABLE_CRYPTODISK=y" >> /etc/default/grub
 

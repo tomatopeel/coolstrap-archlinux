@@ -16,7 +16,7 @@ fi
 
 shopt -s dotglob
 for f in ~/dotfiles/*; do
-  if [[ "$f" == ".git" ]]; then continue; fi
+  if [[ "${f##*/}" == ".git" ]]; then continue; fi
   if [[ -f "$HOME/${f##*/}" ]]; then
     rm -f "$HOME/${f##*/}"
   fi

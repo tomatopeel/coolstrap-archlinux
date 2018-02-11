@@ -102,18 +102,25 @@ if [[ -z "$CRYPTROOT" ]]; then
   CRYPTROOT=cryptroot
 fi
 
+PART=
+if [[ "$DEVICE" =~ .*nbd[0-9] ]]; then
+  PART="${DEVICE}p1"
+else
+  PART="${DEVICE}1"
+fi
+
 ## Create bootable encrypted root partition
-echo -n "$BD_PW" | cryptsetup -v luksFormat "${DEVICE}1" - &&
-  echo -n "$BD_PW" | cryptsetup open "${DEVICE}1" "$CRYPTROOT" - &&
+echo -n "$BD_PW" | cryptsetup -v luksFormat "$PART" - &&
+  echo -n "$BD_PW" | cryptsetup open "$PART" "$CRYPTROOT" - &&
   mkfs.ext4 "/dev/mapper/$CRYPTROOT" ||
-  die "$LINENO: couldn't cryptsetup/mkfs/mount ${DEVICE}1"
+  die "$LINENO: couldn't cryptsetup/mkfs/mount $PART"
 sleep 1 # get "remove ioctl on ... failed: device or resource busy w/o this
 cryptsetup close "$CRYPTROOT"
 
 ## Script passed to chroot into bootstrap image directory
 SCRIPT=system-scripts/in-bootstrap-chroot.sh
 cp "$SCRIPT" "$ROOT/bin/${SCRIPT##*/}"
-echo -n "$BD_PW" | "$CHROOT" "$ROOT" "${SCRIPT##*/}" "$DEVICE" "$CRYPTROOT" ||
+echo -n "$BD_PW" | "$CHROOT" "$ROOT" "${SCRIPT##*/}" "$PART" "$CRYPTROOT" ||
   die "$SCRIPT exited"
 rm "$ROOT/bin/${SCRIPT##*/}"
 unset SCRIPT
@@ -140,6 +147,8 @@ cp "$SCRIPT" "mnt/bin/${SCRIPT##*/}"
 rm "mnt/bin/${SCRIPT##*/}"
 unset SCRIPT
 sleep 1
+
+echo -n "$BD_PW" | cryptsetup luksAddKey "$PART" mnt/crypto_keyfile.bin || die
 
 umount "/dev/mapper/$CRYPTROOT" || die "couldn't umount /dev/mapper/$CRYPTROOT"
 cryptsetup close "$CRYPTROOT" || die "couldn't close $CRYPTROOT"

@@ -6,11 +6,11 @@ die() {
 }
 
 read -r BD_PW
-DEVICE="$1"
+PART="$1"
 CRYPTROOT="$2"
 
-echo -n "$BD_PW" | cryptsetup open "${DEVICE}1" "$CRYPTROOT" - ||
-  die "$LINENO: couldn't cryptsetup open ${DEVICE}1"
+echo -n "$BD_PW" | cryptsetup open "$PART" "$CRYPTROOT" - ||
+  die "$LINENO: couldn't cryptsetup open $PART"
 
 mount "/dev/mapper/$CRYPTROOT" /mnt ||
   die "$LINENO: couldn't mount $CRYPTROOT to /mnt"
